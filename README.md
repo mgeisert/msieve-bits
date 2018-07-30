@@ -1,5 +1,5 @@
 # _msieve-bits_
-Minor mods to Jason P's factorization powerhouse _msieve_.
+Minor mods to Jason Papadopoulos' factorization powerhouse _msieve_.
 
 _msieve_ can be found at https://github.com/MersenneForum/msieve.
 
