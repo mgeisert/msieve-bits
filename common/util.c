@@ -81,6 +81,7 @@ read_clock(void) {
 /*------------------------------------------------------------------*/
 double
 get_cpu_time(void) {
+	uint64 res;
 
 #if defined(WIN32) || defined(_WIN64)
 	FILETIME create_time = {0, 0};
@@ -94,7 +95,7 @@ get_cpu_time(void) {
 			&kernel_time,
 			&user_time);
 
-	return ((uint64)user_time.dwHighDateTime << 32 | 
+	res = ((uint64)user_time.dwHighDateTime << 32 | 
 	               user_time.dwLowDateTime) / 10000000.0;
 #else
 	struct rusage r_usage;
@@ -105,9 +106,27 @@ get_cpu_time(void) {
 	getrusage(RUSAGE_SELF, &r_usage);
 	#endif
 
-	return ((uint64)r_usage.ru_utime.tv_sec * 1000000 +
+	res = ((uint64)r_usage.ru_utime.tv_sec * 1000000 +
 	               r_usage.ru_utime.tv_usec) / 1000000.0;
 #endif
+	return res;
+}
+
+/*--------------------------------------------------------------------*/
+char *
+cpu_hms(double cputime) {
+	static char buf[32];
+	int h, m, s;
+
+	/* cputime arrives as count of seconds */
+	s = (int) cputime % 60;
+	cputime /= 60; /* now in minutes */
+	m = (int) cputime % 60;
+	cputime /= 60; /* now in hours */
+	h = (int) cputime;
+
+	snprintf(buf, sizeof(buf), "%.02d:%.02d:%.02d", h, m, s);
+	return buf;
 }
 
 /*--------------------------------------------------------------------*/

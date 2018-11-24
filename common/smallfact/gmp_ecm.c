@@ -53,6 +53,20 @@ static const work_t work_table[] = {
    {30,  250000,  430},
    {35, 1000000,  904},
    {40, 3000000, 2350},
+//XXX Despite Jason P.'s sobering comment above, I'm adding more entries
+//XXX to work_table to allow searching by ECM for larger factors.
+   {45,    11e6,  4480},
+   {50,    43e6,  7553},
+   {55,    11e7, 17769},
+   {60,    26e7, 42017},
+   {65,    85e7, 69408},
+//XXX Data for all rows above, except very first row, is from gmp-ecm README.
+   {70,    29e8, 115153},
+   {75,    76e8, 211681},
+   {80,    25e9, 296479},
+//XXX Data for 3 rows above is from
+//XXX https://members.loria.fr/PZimmermann/records/ecm/params.html
+//XXX using 'expected curve' values from the GMP-ECM 7 column.
 };
 
 /* to save work on P+-1 runs, we remember how much
@@ -157,8 +171,24 @@ static uint32 choose_max_digits(msieve_obj *obj, uint32 bits) {
 				max_digits = 30;
 			else if (bits < 400)
 				max_digits = 35;
-			else
+			else if (bits < 440)
 				max_digits = 40;
+			else if (bits < 480)
+				max_digits = 45;
+			else if (bits < 520)
+				max_digits = 50;
+			else if (bits < 560)
+				max_digits = 55;
+			else if (bits < 600)
+				max_digits = 60;
+			else if (bits < 640)
+				max_digits = 65;
+			else if (bits < 680)
+				max_digits = 70;
+			else if (bits < 720)
+				max_digits = 75;
+			else
+				max_digits = 80;
 		}
 	}
 	return max_digits;
@@ -225,7 +255,13 @@ uint32 ecm_pp1_pm1(msieve_obj *obj, mp_t *n, mp_t *reduced_n,
 	for (i = 0; i < NUM_TABLE_ENTRIES; i++) {
 		const work_t *curr_work = work_table + i;
 		uint32 log_rate, next_log;
+		uint32 num_ecm_trials;
 		int status;
+		double cpu_start_time;
+
+		if (obj->flags & MSIEVE_FLAG_DEEP_ECM_DC)
+			if (curr_work->digits < obj->deep_ecm_dc)
+				continue;
 
 		if (curr_work->digits > max_digits)
 			break;
@@ -233,12 +269,19 @@ uint32 ecm_pp1_pm1(msieve_obj *obj, mp_t *n, mp_t *reduced_n,
 		logprintf(obj, "searching for %u-digit factors\n",
 				curr_work->digits);
 
+		if (obj->flags & MSIEVE_FLAG_SKIP_PM1)
+			goto after_pm1;
+
 		/* perform P-1. Stage 1 runs much faster for this
 		   algorithm than it does for ECM, so crank up the
 		   stage 1 bound
 		
 		   We save the stage 1 output to reduce the work at
 		   the next digit level */
+
+		if (curr_work->digits >= 30)
+			logprintf(obj, "starting P-1\n");
+		cpu_start_time = get_cpu_time();
 
 		for (j = 0; j < NUM_PM1_TRIALS; j++) {
 			pm1_pp1_t *tmp = non_ecm_vals + j;
@@ -255,12 +298,24 @@ uint32 ecm_pp1_pm1(msieve_obj *obj, mp_t *n, mp_t *reduced_n,
 			HANDLE_FACTOR_FOUND("P-1");
 		}
 
+		fprintf(stderr, "completed P-1 in %s\n",
+			cpu_hms(get_cpu_time() - cpu_start_time));
+		fflush(stderr);
+
+after_pm1:
+		if (obj->flags & MSIEVE_FLAG_SKIP_PP1)
+			goto after_pp1;
+
 		/* perform P+1. Stage 1 runs somewhat faster for this
 		   algorithm than it does for ECM, so crank up the
 		   stage 1 bound
 		
 		   We save the stage 1 output to reduce the work at
 		   the next digit level */
+
+		if (curr_work->digits >= 30)
+			logprintf(obj, "starting P+1\n");
+		cpu_start_time = get_cpu_time();
 
 		for (j = 0; j < NUM_PP1_TRIALS; j++) {
 			pm1_pp1_t *tmp = non_ecm_vals + NUM_PM1_TRIALS + j;
@@ -276,6 +331,14 @@ uint32 ecm_pp1_pm1(msieve_obj *obj, mp_t *n, mp_t *reduced_n,
 			mpz_set(tmp->start_val, params->x);
 			HANDLE_FACTOR_FOUND("P+1");
 		}
+
+		fprintf(stderr, "completed P+1 in %s\n",
+			cpu_hms(get_cpu_time() - cpu_start_time));
+		fflush(stderr);
+
+after_pp1:
+		if (obj->flags & MSIEVE_FLAG_SKIP_ECM)
+			goto after_ecm;
 
 		/* run the specified number of ECM curves. Because
 		   so many curves could be necessary, just start each
@@ -293,7 +356,14 @@ uint32 ecm_pp1_pm1(msieve_obj *obj, mp_t *n, mp_t *reduced_n,
 		}
 
 		next_log = log_rate;
-		for (j = 0; j < curr_work->num_ecm_trials; j++) {
+		num_ecm_trials = (obj->flags & MSIEVE_FLAG_DEEP_ECM_CC) ?
+				  obj->deep_ecm_cc : curr_work->num_ecm_trials;
+
+		if (curr_work->digits >= 30)
+			logprintf(obj, "starting ECM\n");
+		cpu_start_time = get_cpu_time();
+
+		for (j = 0; j < num_ecm_trials; j++) {
 
 			params->method = ECM_ECM;
 			params->B1done = 1.0;
@@ -304,16 +374,21 @@ uint32 ecm_pp1_pm1(msieve_obj *obj, mp_t *n, mp_t *reduced_n,
 					curr_work->stage_1_bound, params);
 			HANDLE_FACTOR_FOUND("ECM");
 
-			if (log_rate && j == next_log) {
+			if (log_rate && (j + 1) == next_log) {
 				next_log += log_rate;
-				fprintf(stderr, "%u of %u curves\r",
-						j, curr_work->num_ecm_trials);
+				fprintf(stderr, "%u of %u curves, avg %s\r",
+					j + 1, num_ecm_trials,
+					cpu_hms((get_cpu_time() - cpu_start_time) / (j + 1)));
 				fflush(stderr);
 			}
 		}
 
-		if (log_rate)
-			fprintf(stderr, "\ncompleted %u ECM curves\n", j);
+		fprintf(stderr, "\ncompleted %u ECM curves in %s\n",
+			j, cpu_hms(get_cpu_time() - cpu_start_time));
+
+after_ecm:
+		if (obj->flags & MSIEVE_FLAG_NO_GRADUATE)
+			break;
 	}
 
 clean_up:

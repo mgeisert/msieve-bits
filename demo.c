@@ -109,10 +109,20 @@ void print_usage(char *progname) {
 		 "   -g <num>  use GPU <num>, 0 <= num < (# graphics cards)>\n"
 #endif
 	         "   -t <num>  use at most <num> threads\n"
+		 "   -x        run selected passes only; do not graduate\n"
 		 "\n"
+		 " small factoring options:\n"
+		 "   (default  run P-1 and P+1 passes to find small factors)\n"
+		 "   -nopm1    don't run P-1 pass at all\n"
+		 "   -nopp1    don't run P+1 pass at all\n\n"
 		 " elliptic curve options:\n"
-		 "   -e        perform 'deep' ECM, seek factors > 15 digits\n\n"
+		 "   (default  run 'shallow' ECM pass to find small factors)\n"
+		 "   -noecm    don't run ECM pass at all\n"
+		 "   -e        perform 'deep' ECM, seek factors > 15 digits\n"
+		 "   -ecc <num>  deep ECM with given number of curves\n"
+		 "   -edc <num>  deep ECM starting w/given number of digits\n\n"
 		 " quadratic sieve options:\n"
+		 "   (default  run QS on numbers <= 10^80, too small for NFS)\n"
 		 "   -c        client: only perform sieving\n\n"
 		 " number field sieve options:\n\n"
 		 "           [nfs_phase] \"arguments\"\n\n"
@@ -191,6 +201,8 @@ void factor_integer(char *buf, uint32 flags,
 		    char *nfs_fbfile_name,
 		    uint32 *seed1, uint32 *seed2,
 		    uint32 max_relations,
+		    uint32 deep_ecm_cc,
+		    uint32 deep_ecm_dc,
 		    enum cpu_type cpu,
 		    uint32 cache_size1,
 		    uint32 cache_size2,
@@ -221,6 +233,7 @@ void factor_integer(char *buf, uint32 flags,
 					savefile_name, logfile_name,
 					nfs_fbfile_name,
 					*seed1, *seed2, max_relations,
+					deep_ecm_cc, deep_ecm_dc,
 					cpu, cache_size1, cache_size2,
 					num_threads, which_gpu,
 					nfs_args);
@@ -307,7 +320,7 @@ void *countdown_thread(void *pminutes) {
 /*--------------------------------------------------------------------*/
 int main(int argc, char **argv) {
 
-	char buf[500];
+	char buf[1280];	//XXX was 500
 	uint32 seed1, seed2;
 	char *savefile_name = NULL;
 	char *logfile_name = NULL;
@@ -318,6 +331,8 @@ int main(int argc, char **argv) {
 	int i;
 	int32 deadline = 0;
 	uint32 max_relations = 0;
+	uint32 deep_ecm_cc = 0;
+	uint32 deep_ecm_dc = 0;
 	enum cpu_type cpu;
 	uint32 cache_size1; 
 	uint32 cache_size2; 
@@ -391,6 +406,32 @@ int main(int argc, char **argv) {
 
 			case 'e':
 				flags |= MSIEVE_FLAG_DEEP_ECM;
+				if (0 == strncmp(argv[i], "-ecc", 4)) {
+					flags |= MSIEVE_FLAG_DEEP_ECM_CC;
+					if (i + 1 < argc &&
+					    isdigit(argv[i+1][0])) {
+						deep_ecm_cc = atol(argv[i+1]);
+						i++;
+					} else {
+						print_usage(argv[0]);
+						return -1;
+					}
+				}
+				else if (0 == strncmp(argv[i], "-edc", 4)) {
+					flags |= MSIEVE_FLAG_DEEP_ECM_DC;
+					if (i + 1 < argc &&
+					    isdigit(argv[i+1][0])) {
+						deep_ecm_dc = atol(argv[i+1]);
+						i++;
+					} else {
+						print_usage(argv[0]);
+						return -1;
+					}
+				}
+				else if (argv[i][2]) {
+					print_usage(argv[0]);
+					return -1;
+				}
 				i++;
 				break;
 
@@ -447,6 +488,19 @@ int main(int argc, char **argv) {
 					case '3':
 						flags |= MSIEVE_FLAG_NFS_SQRT;
 						break;
+					}
+					break;
+
+				case 'o':
+					if (0 == strncmp(argv[i], "-nopm1", 6))
+						flags |= MSIEVE_FLAG_SKIP_PM1;
+					else if (0 == strncmp(argv[i], "-nopp1", 6))
+						flags |= MSIEVE_FLAG_SKIP_PP1;
+					else if (0 == strncmp(argv[i], "-noecm", 6))
+						flags |= MSIEVE_FLAG_SKIP_ECM;
+					else {
+						print_usage(argv[0]);
+						return -1;
 					}
 					break;
 
@@ -529,6 +583,11 @@ int main(int argc, char **argv) {
 				i++;
 				break;
 
+			case 'x':
+				flags |= MSIEVE_FLAG_NO_GRADUATE;
+				i++;
+				break;
+
 			default:
 				print_usage(argv[0]);
 				return -1;
@@ -560,6 +619,7 @@ int main(int argc, char **argv) {
 				logfile_name, nfs_fbfile_name,
 				&seed1, &seed2,
 				max_relations, 
+				deep_ecm_cc, deep_ecm_dc,
 				cpu, cache_size1, cache_size2,
 				num_threads, which_gpu,
 				nfs_args);
@@ -574,6 +634,7 @@ int main(int argc, char **argv) {
 					logfile_name, nfs_fbfile_name,
 					&seed1, &seed2,
 					max_relations, 
+					deep_ecm_cc, deep_ecm_dc,
 					cpu, cache_size1, cache_size2,
 					num_threads, which_gpu, nfs_args);
 			if (feof(stdin))
@@ -594,6 +655,7 @@ int main(int argc, char **argv) {
 					logfile_name, nfs_fbfile_name,
 					&seed1, &seed2,
 					max_relations, 
+					deep_ecm_cc, deep_ecm_dc,
 					cpu, cache_size1, cache_size2,
 					num_threads, which_gpu, nfs_args);
 			if (feof(infile))

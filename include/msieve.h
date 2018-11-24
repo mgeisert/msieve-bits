@@ -88,7 +88,13 @@ enum msieve_flags {
 	MSIEVE_FLAG_NFS_SQRT = 0x1000,    /* if input is large enough, perform
 	                                    square root phase for NFS */
 	MSIEVE_FLAG_NFS_LA_RESTART = 0x2000,/* restart the NFS linear algbra */
-	MSIEVE_FLAG_DEEP_ECM = 0x4000    /* perform nontrivial-size ECM */
+	MSIEVE_FLAG_DEEP_ECM = 0x4000,    /* perform nontrivial-size ECM */
+ 	MSIEVE_FLAG_DEEP_ECM_CC = 0x8000, /* deep ECM explicit curve count */
+ 	MSIEVE_FLAG_DEEP_ECM_DC = 0x10000, /* deep ECM starting digit count */
+	MSIEVE_FLAG_SKIP_PM1 = 0x20000,   /* don't bother running P-1 pass */
+	MSIEVE_FLAG_SKIP_PP1 = 0x40000,   /* don't bother running P+1 pass */
+	MSIEVE_FLAG_SKIP_ECM = 0x80000,   /* don't bother running ECM pass */
+	MSIEVE_FLAG_NO_GRADUATE = 0x100000, /* don't go past selected passes */
 };
 	
 /* structure encapsulating the savefile used in a factorization */
@@ -130,6 +136,8 @@ typedef struct {
 	                              stage will try to find. The default (0)
 				      is to keep sieving until all necessary 
 				      relations are found. */
+	uint32 deep_ecm_cc;       /* deep ECM explicit curve count */
+	uint32 deep_ecm_dc;       /* deep ECM starting digit count */
 	uint32 which_gpu;         /* ordinal ID of GPU to use */
 
 
@@ -166,6 +174,8 @@ msieve_obj * msieve_obj_new(char *input_integer,
 			    uint32 seed1,
 			    uint32 seed2,
 			    uint32 max_relations,
+			    uint32 deep_ecm_cc,
+			    uint32 deep_ecm_dc,
 			    enum cpu_type cpu,
 			    uint32 cache_size1,
 			    uint32 cache_size2,

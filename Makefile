@@ -19,8 +19,9 @@ WIN = 0
 # get overridden by architecture-specific builds)
 CC = gcc
 WARN_FLAGS = -Wall -W
-OPT_FLAGS = -O3 -fomit-frame-pointer -march=core2 \
-	    -D_FILE_OFFSET_BITS=64 -DNDEBUG -D_LARGEFILE64_SOURCE
+OPT_FLAGS = -g -O3 -fomit-frame-pointer -march=native -mtune=native \
+	    -D_FILE_OFFSET_BITS=64 -DNDEBUG -D_LARGEFILE64_SOURCE \
+	    -DSIEVE_TIMING
 
 # use := instead of = so we only run the following once
 SVN_VERSION := $(shell svnversion .)
@@ -30,6 +31,7 @@ endif
 
 CFLAGS = $(OPT_FLAGS) $(MACHINE_FLAGS) $(WARN_FLAGS) \
 	 	-DMSIEVE_SVN_VERSION="\"$(SVN_VERSION)\"" \
+		-I/usr/local/include	\
 		-I. -Iinclude -Ignfs -Ignfs/poly -Ignfs/poly/stage1
 
 # tweak the compile flags
@@ -37,6 +39,7 @@ CFLAGS = $(OPT_FLAGS) $(MACHINE_FLAGS) $(WARN_FLAGS) \
 ifeq ($(ECM),1)
 	CFLAGS += -DHAVE_GMP_ECM
 	LIBS += -lecm
+	LDFLAGS += -L/usr/local/lib
 endif
 ifeq ($(WIN),1)
 	LDFLAGS += -Wl,--large-address-aware
@@ -262,7 +265,7 @@ help:
 
 all: $(COMMON_OBJS) $(QS_OBJS) $(NFS_OBJS) $(GPU_OBJS)
 	rm -f libmsieve.a
-	ar r libmsieve.a $(COMMON_OBJS) $(QS_OBJS) $(NFS_OBJS)
+	ar rs libmsieve.a $(COMMON_OBJS) $(QS_OBJS) $(NFS_OBJS)
 	ranlib libmsieve.a
 	$(CC) $(CFLAGS) demo.c -o msieve $(LDFLAGS) \
 			libmsieve.a $(LIBS)

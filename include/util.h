@@ -183,6 +183,7 @@ void * aligned_malloc(size_t len, uint32 align);
 void aligned_free(void *newptr);
 uint64 read_clock(void);
 double get_cpu_time(void);
+char *cpu_hms(double);
 void set_idle_priority(void);
 uint64 get_file_size(char *name);
 uint64 get_ram_size(void);
