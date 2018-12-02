@@ -19,6 +19,7 @@ msieve_obj * msieve_obj_new(char *input_integer, uint32 flags,
 			    char *savefile_name, char *logfile_name,
 			    char *nfs_fbfile_name,
 			    uint32 seed1, uint32 seed2, uint32 max_relations,
+			    uint32 deep_ecm_cc, uint32 deep_ecm_dc,
 			    enum cpu_type cpu,
 			    uint32 cache_size1, uint32 cache_size2,
 			    uint32 num_threads, uint32 which_gpu, 
@@ -31,6 +32,8 @@ msieve_obj * msieve_obj_new(char *input_integer, uint32 flags,
 	obj->seed1 = seed1;
 	obj->seed2 = seed2;
 	obj->max_relations = max_relations;
+	obj->deep_ecm_cc = deep_ecm_cc;
+	obj->deep_ecm_dc = deep_ecm_dc;
 	obj->cpu = cpu;
 	obj->cache_size1 = cache_size1;
 	obj->cache_size2 = cache_size2;
@@ -169,6 +172,8 @@ void msieve_run(msieve_obj *obj) {
 	mp_t n, reduced_n;
 	factor_list_t factor_list;
 	time_t start_time;
+	uint64 start_time_usecs;
+	struct timeval thistime;
 
 	/* convert the input number to an mp_t */
 
@@ -193,6 +198,8 @@ void msieve_run(msieve_obj *obj) {
 				MSIEVE_MAJOR_VERSION, 
 				MSIEVE_MINOR_VERSION,
 				MSIEVE_SVN_VERSION);
+	gettimeofday(&thistime, NULL);
+	start_time_usecs = thistime.tv_sec * 1000000 + thistime.tv_usec;
 	start_time = time(NULL);
 	if (obj->flags & MSIEVE_FLAG_LOG_TO_STDOUT) {
 		printf("%s", ctime(&start_time));
@@ -269,9 +276,13 @@ clean_up:
 	factor_list_free(&n, &factor_list, obj);
 	if (!(obj->flags & MSIEVE_FLAG_STOP_SIEVING))
 		obj->flags |= MSIEVE_FLAG_FACTORIZATION_DONE;
-	i = (uint32)(time(NULL) - start_time);
-	logprintf(obj, "elapsed time %02d:%02d:%02d\n", i / 3600,
-				(i % 3600) / 60, i % 60);
+	gettimeofday(&thistime, NULL);
+	uint64 usecs = thistime.tv_sec * 1000000 +
+			thistime.tv_usec - start_time_usecs;
+	i = usecs / 1000000;
+	logprintf(obj, "elapsed time %02d:%02d:%02d.%03d\n",
+		  i / 3600, (i % 3600) / 60, i % 60,
+		  (usecs % 1000000) / 1000);
 }
 
 /*--------------------------------------------------------------------*/
